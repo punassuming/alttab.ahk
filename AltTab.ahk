@@ -831,6 +831,7 @@ GuiContextMenu:  ; right-click or press of the Apps key -> displays the menu onl
   Menu, Gui_Window_Group_Delete, DeleteAll
   Menu, Gui_Processes, DeleteAll
   Menu, Gui_Settings_Help, DeleteAll
+  Menu, Gui_Win10_Windows, DeleteAll
 
   ; Min/Max windows
   Menu, Gui_MinMax_Windows, Add, % "Maximize all:  " Exe_Name%RowText%, Gui_MinMax_Windows
@@ -838,6 +839,25 @@ GuiContextMenu:  ; right-click or press of the Apps key -> displays the menu onl
   Menu, Gui_MinMax_Windows, Add
   Menu, Gui_MinMax_Windows, Add, % "Normal all:     " Exe_Name%RowText%, Gui_MinMax_Windows
   Menu, ContextMenu1, Add, &Min / Max, :Gui_MinMax_Windows
+
+  ; Windows 10/11 window management
+  Menu, Gui_Win10_Windows, Add, Snap Left (#Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Snap Right (#Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Snap Up / Max (#Up), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Snap Down / Restore (#Down), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Move to Previous Monitor (# + Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Move to Next Monitor (# + Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Move window to Previous Desktop (Win+Ctrl+Shift+Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Move window to Next Desktop (Win+Ctrl+Shift+Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Switch to Previous Desktop (Win+Ctrl+Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Switch to Next Desktop (Win+Ctrl+Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Task View (#Tab), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Toggle Desktop (#D), Win10_Window_Action
+  Menu, ContextMenu1, Add, Windows &10/11 Actions, :Gui_Win10_Windows
 
   ; Window Group sub-menu entry
   Menu, ContextMenu1, Add ; spacer
@@ -912,6 +932,39 @@ Gui_MinMax_Windows:
   Sleep, 50 ; wait for min/max state to change otherwise updated listview will be wrong
   Gosub, Display_List
   Gosub, GuiControl_Enable_ListView1
+  Return
+
+Win10_Window_Action:
+  Action_Label := A_ThisMenuItem
+  Action_Key :=
+  If InStr(Action_Label, "Snap Left")
+    Action_Key := "#{Left}"
+  Else If InStr(Action_Label, "Snap Right")
+    Action_Key := "#{Right}"
+  Else If InStr(Action_Label, "Snap Up")
+    Action_Key := "#{Up}"
+  Else If InStr(Action_Label, "Snap Down")
+    Action_Key := "#{Down}"
+  Else If InStr(Action_Label, "Previous Monitor")
+    Action_Key := "#+{Left}"
+  Else If InStr(Action_Label, "Next Monitor")
+    Action_Key := "#+{Right}"
+  Else If InStr(Action_Label, "Previous Desktop (Win+Ctrl+Shift+Left)")
+    Action_Key := "#^+{Left}"
+  Else If InStr(Action_Label, "Next Desktop (Win+Ctrl+Shift+Right)")
+    Action_Key := "#^+{Right}"
+  Else If InStr(Action_Label, "Switch to Previous Desktop")
+    Action_Key := "#^{Left}"
+  Else If InStr(Action_Label, "Switch to Next Desktop")
+    Action_Key := "#^{Right}"
+  Else If InStr(Action_Label, "Task View")
+    Action_Key := "#{Tab}"
+  Else If InStr(Action_Label, "Toggle Desktop")
+    Action_Key := "#d"
+  Get__Selected_Row_and_RowText()
+  Gosub, ListView_Destroy
+  If (Action_Key != "")
+    SendInput, %Action_Key%
   Return
 
 GuiControl_Disable_ListView1:
