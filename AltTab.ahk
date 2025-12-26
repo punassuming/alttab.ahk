@@ -36,6 +36,9 @@ Exe_Width_Max := Listview_Width / 5 ; Exe column max width
 ; Tray Icon file name
 Tray_Icon := "Icon.ico"
 
+; Windows 10/11 action wait timeout (seconds)
+Win10_Action_Timeout := 0.5
+
 
 ;========================================================================================================
 ; USER OVERRIDABLE SETTINGS:
@@ -846,8 +849,8 @@ GuiContextMenu:  ; right-click or press of the Apps key -> displays the menu onl
   Menu, Gui_Win10_Windows, Add, Snap Up / Max (#Up), Win10_Window_Action
   Menu, Gui_Win10_Windows, Add, Snap Down / Restore (#Down), Win10_Window_Action
   Menu, Gui_Win10_Windows, Add
-  Menu, Gui_Win10_Windows, Add, Move to Previous Monitor (# + Left), Win10_Window_Action
-  Menu, Gui_Win10_Windows, Add, Move to Next Monitor (# + Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Move to Previous Monitor (Win+Shift+Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Move to Next Monitor (Win+Shift+Right), Win10_Window_Action
   Menu, Gui_Win10_Windows, Add
   Menu, Gui_Win10_Windows, Add, Move window to Previous Desktop (Win+Ctrl+Shift+Left), Win10_Window_Action
   Menu, Gui_Win10_Windows, Add, Move window to Next Desktop (Win+Ctrl+Shift+Right), Win10_Window_Action
@@ -935,35 +938,48 @@ Gui_MinMax_Windows:
   Return
 
 Win10_Window_Action:
+  Global Win10_Action_Timeout
   Action_Label := A_ThisMenuItem
-  Action_Key :=
-  If InStr(Action_Label, "Snap Left")
-    Action_Key := "#{Left}"
-  Else If InStr(Action_Label, "Snap Right")
-    Action_Key := "#{Right}"
-  Else If InStr(Action_Label, "Snap Up")
-    Action_Key := "#{Up}"
-  Else If InStr(Action_Label, "Snap Down")
-    Action_Key := "#{Down}"
-  Else If InStr(Action_Label, "Previous Monitor")
-    Action_Key := "#+{Left}"
-  Else If InStr(Action_Label, "Next Monitor")
-    Action_Key := "#+{Right}"
-  Else If InStr(Action_Label, "Previous Desktop (Win+Ctrl+Shift+Left)")
-    Action_Key := "#^+{Left}"
-  Else If InStr(Action_Label, "Next Desktop (Win+Ctrl+Shift+Right)")
-    Action_Key := "#^+{Right}"
-  Else If InStr(Action_Label, "Switch to Previous Desktop")
-    Action_Key := "#^{Left}"
-  Else If InStr(Action_Label, "Switch to Next Desktop")
-    Action_Key := "#^{Right}"
-  Else If InStr(Action_Label, "Task View")
-    Action_Key := "#{Tab}"
-  Else If InStr(Action_Label, "Toggle Desktop")
-    Action_Key := "#d"
+  If (InStr(Action_Label, "("))
+  {
+    Action_Id := RTrim(SubStr(Action_Label, 1, InStr(Action_Label, "(") - 1))
+  }
+  Else
+    Action_Id := Trim(Action_Label)
+  Action_Key := ""
+  static Action_Map := { "Snap Left": "#{Left}"
+                       , "Snap Right": "#{Right}"
+                       , "Snap Up / Max": "#{Up}"
+                       , "Snap Down / Restore": "#{Down}"
+                       , "Move to Previous Monitor": "#+{Left}"
+                       , "Move to Next Monitor": "#+{Right}"
+                       , "Move window to Previous Desktop": "#^+{Left}"
+                       , "Move window to Next Desktop": "#^+{Right}"
+                       , "Switch to Previous Desktop": "#^{Left}"
+                       , "Switch to Next Desktop": "#^{Right}"
+                       , "Task View": "#{Tab}"
+                       , "Toggle Desktop": "#d"
+                       }
+  If Action_Map.HasKey(Action_Id)
+    Action_Key := Action_Map[Action_Id]
+  Else
+  {
+    OutputDebug, AltTab.ahk Win10_Window_Action: unknown action "%Action_Id%"
+    Return
+  }
   Get__Selected_Row_and_RowText()
+  Target_wid := Window%RowText%
   Gosub, ListView_Destroy
-  If (Action_Key != "")
+  If Target_wid
+  {
+    WinActivate, ahk_id %Target_wid%
+    WinWaitActive, ahk_id %Target_wid%,, Win10_Action_Timeout
+    Activated := (ErrorLevel = 0)
+  }
+  Else
+    ; Actions like desktop switching or task view do not require a specific window to be active.
+    Activated := 1
+  If (Action_Key != "" and Activated)
     SendInput, %Action_Key%
   Return
 
