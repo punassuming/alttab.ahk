@@ -36,6 +36,11 @@ Exe_Width_Max := Listview_Width / 5 ; Exe column max width
 ; Tray Icon file name
 Tray_Icon := "Icon.ico"
 
+; Virtual Desktop Accessor (optional)
+VDA_DLL_Name := "VirtualDesktopAccessor.dll"
+VDA_DLL_Path := A_ScriptDir "\" VDA_DLL_Name
+VDA_Is_Available := FileExist(VDA_DLL_Path) ? 1 : 0
+
 ; Windows 10/11 action wait timeout (seconds)
 Win10_Action_Timeout := 0.5
 
@@ -860,6 +865,19 @@ GuiContextMenu:  ; right-click or press of the Apps key -> displays the menu onl
   Menu, Gui_Win10_Windows, Add
   Menu, Gui_Win10_Windows, Add, Task View (#Tab), Win10_Window_Action
   Menu, Gui_Win10_Windows, Add, Toggle Desktop (#D), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  If (VDA_Is_Available)
+  {
+    Menu, Gui_Win10_Windows, Add, Switch to Previous Desktop (VDA), Win10_Window_Action
+    Menu, Gui_Win10_Windows, Add, Switch to Next Desktop (VDA), Win10_Window_Action
+    Menu, Gui_Win10_Windows, Add, Move window to Previous Desktop (VDA), Win10_Window_Action
+    Menu, Gui_Win10_Windows, Add, Move window to Next Desktop (VDA), Win10_Window_Action
+  }
+  Else
+  {
+    Menu, Gui_Win10_Windows, Add, VirtualDesktopAccessor.dll not found, Win10_Window_Action
+    Menu, Gui_Win10_Windows, Disable, VirtualDesktopAccessor.dll not found
+  }
   Menu, ContextMenu1, Add, Windows &10/11 Actions, :Gui_Win10_Windows
 
   ; Window Group sub-menu entry
@@ -939,13 +957,14 @@ Gui_MinMax_Windows:
 
 Win10_Window_Action:
   Global Win10_Action_Timeout
-  Action_Label := A_ThisMenuItem
-  If (InStr(Action_Label, "("))
+  Action_Label_Full := A_ThisMenuItem
+  Action_Label := Action_Label_Full
+  If (InStr(Action_Label_Full, "("))
   {
-    Action_Id := RTrim(SubStr(Action_Label, 1, InStr(Action_Label, "(") - 1))
+    Action_Id := RTrim(SubStr(Action_Label_Full, 1, InStr(Action_Label_Full, "(") - 1))
   }
   Else
-    Action_Id := Trim(Action_Label)
+    Action_Id := Trim(Action_Label_Full)
   Action_Key := ""
   static Action_Map := { "Snap Left": "#{Left}"
                        , "Snap Right": "#{Right}"
@@ -982,9 +1001,53 @@ Win10_Window_Action:
   Else
     ; Actions like desktop switching or task view do not require a specific window to be active.
     Activated := 1
+  If (Action_Label_Full ~= "VDA" and Activated)
+  {
+    if VDA_Handle(Action_Label_Full, Target_wid)
+      Return
+  }
   If (Action_Key != "" and Activated)
     SendInput, %Action_Key%
   Return
+
+VDA_Handle(Action_Id, Target_wid)
+{
+  Global VDA_DLL_Path, VDA_Is_Available
+  if !VDA_Is_Available
+    return 0
+
+  desktopCount := DllCall(VDA_DLL_Path "\GetDesktopCount", "Int")
+  current := DllCall(VDA_DLL_Path "\GetCurrentDesktopNumber", "Int")
+  if (desktopCount < 1 or current < 0)
+    return 0
+
+  target := current
+  if (Action_Id = "Switch to Previous Desktop (VDA)")
+    target := (current - 1 >= 0) ? current - 1 : current
+  else if (Action_Id = "Switch to Next Desktop (VDA)")
+    target := (current + 1 < desktopCount) ? current + 1 : current
+  else if (Action_Id = "Move window to Previous Desktop (VDA)")
+    target := (current - 1 >= 0) ? current - 1 : current
+  else if (Action_Id = "Move window to Next Desktop (VDA)")
+    target := (current + 1 < desktopCount) ? current + 1 : current
+  else
+    return 0
+
+  if (target = current and Action_Id contains "Switch to")
+    return 1
+
+  if (Action_Id contains "Move window")
+  {
+    if !Target_wid
+      return 0
+    DllCall(VDA_DLL_Path "\MoveWindowToDesktopNumber", "Ptr", Target_wid, "Int", target)
+    DllCall(VDA_DLL_Path "\GoToDesktopNumber", "Int", target)
+    return 1
+  }
+
+  DllCall(VDA_DLL_Path "\GoToDesktopNumber", "Int", target)
+  return 1
+}
 
 GuiControl_Disable_ListView1:
   OnMessage( 0x06, "" ) ; turn off: no alt tab list window lost focus -> hide list
