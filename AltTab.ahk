@@ -972,6 +972,9 @@ Win10_Window_Action:
   Gosub, ListView_Destroy
   If Target_wid
   {
+    WinGet, Target_MinMax, MinMax, ahk_id %Target_wid%
+    if (Target_MinMax = -1)
+      WinRestore, ahk_id %Target_wid%
     WinActivate, ahk_id %Target_wid%
     WinWaitActive, ahk_id %Target_wid%,, Win10_Action_Timeout
     Activated := (ErrorLevel = 0)
