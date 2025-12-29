@@ -36,6 +36,14 @@ Exe_Width_Max := Listview_Width / 5 ; Exe column max width
 ; Tray Icon file name
 Tray_Icon := "Icon.ico"
 
+; Virtual Desktop Accessor (optional)
+VDA_DLL_Name := "VirtualDesktopAccessor.dll"
+VDA_DLL_Path := A_ScriptDir "\" VDA_DLL_Name
+VDA_Is_Available := FileExist(VDA_DLL_Path) ? 1 : 0
+
+; Windows 10/11 action wait timeout (seconds)
+Win10_Action_Timeout := 0.5
+
 
 ;========================================================================================================
 ; USER OVERRIDABLE SETTINGS:
@@ -831,6 +839,7 @@ GuiContextMenu:  ; right-click or press of the Apps key -> displays the menu onl
   Menu, Gui_Window_Group_Delete, DeleteAll
   Menu, Gui_Processes, DeleteAll
   Menu, Gui_Settings_Help, DeleteAll
+  Menu, Gui_Win10_Windows, DeleteAll
 
   ; Min/Max windows
   Menu, Gui_MinMax_Windows, Add, % "Maximize all:  " Exe_Name%RowText%, Gui_MinMax_Windows
@@ -838,6 +847,38 @@ GuiContextMenu:  ; right-click or press of the Apps key -> displays the menu onl
   Menu, Gui_MinMax_Windows, Add
   Menu, Gui_MinMax_Windows, Add, % "Normal all:     " Exe_Name%RowText%, Gui_MinMax_Windows
   Menu, ContextMenu1, Add, &Min / Max, :Gui_MinMax_Windows
+
+  ; Windows 10/11 window management
+  Menu, Gui_Win10_Windows, Add, Snap Left (#Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Snap Right (#Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Snap Up / Max (#Up), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Snap Down / Restore (#Down), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Move to Previous Monitor (Win+Shift+Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Move to Next Monitor (Win+Shift+Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Move window to Previous Desktop (Win+Ctrl+Shift+Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Move window to Next Desktop (Win+Ctrl+Shift+Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Switch to Previous Desktop (Win+Ctrl+Left), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Switch to Next Desktop (Win+Ctrl+Right), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  Menu, Gui_Win10_Windows, Add, Task View (#Tab), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add, Toggle Desktop (#D), Win10_Window_Action
+  Menu, Gui_Win10_Windows, Add
+  If (VDA_Is_Available)
+  {
+    Menu, Gui_Win10_Windows, Add, Switch to Previous Desktop (VDA), Win10_Window_Action
+    Menu, Gui_Win10_Windows, Add, Switch to Next Desktop (VDA), Win10_Window_Action
+    Menu, Gui_Win10_Windows, Add, Move window to Previous Desktop (VDA), Win10_Window_Action
+    Menu, Gui_Win10_Windows, Add, Move window to Next Desktop (VDA), Win10_Window_Action
+  }
+  Else
+  {
+    Menu, Gui_Win10_Windows, Add, VirtualDesktopAccessor.dll not found, Win10_Window_Action
+    Menu, Gui_Win10_Windows, Disable, VirtualDesktopAccessor.dll not found
+  }
+  Menu, ContextMenu1, Add, Windows &10/11 Actions, :Gui_Win10_Windows
 
   ; Window Group sub-menu entry
   Menu, ContextMenu1, Add ; spacer
@@ -913,6 +954,100 @@ Gui_MinMax_Windows:
   Gosub, Display_List
   Gosub, GuiControl_Enable_ListView1
   Return
+
+Win10_Window_Action:
+  Global Win10_Action_Timeout
+  Action_Label_Full := A_ThisMenuItem
+  Action_Label := Action_Label_Full
+  If (InStr(Action_Label_Full, "("))
+  {
+    Action_Id := RTrim(SubStr(Action_Label_Full, 1, InStr(Action_Label_Full, "(") - 1))
+  }
+  Else
+    Action_Id := Trim(Action_Label_Full)
+  Action_Key := ""
+  static Action_Map := { "Snap Left": "#{Left}"
+                       , "Snap Right": "#{Right}"
+                       , "Snap Up / Max": "#{Up}"
+                       , "Snap Down / Restore": "#{Down}"
+                       , "Move to Previous Monitor": "#+{Left}"
+                       , "Move to Next Monitor": "#+{Right}"
+                       , "Move window to Previous Desktop": "#^+{Left}"
+                       , "Move window to Next Desktop": "#^+{Right}"
+                       , "Switch to Previous Desktop": "#^{Left}"
+                       , "Switch to Next Desktop": "#^{Right}"
+                       , "Task View": "#{Tab}"
+                       , "Toggle Desktop": "#d"
+                       }
+  If Action_Map.HasKey(Action_Id)
+    Action_Key := Action_Map[Action_Id]
+  Else
+  {
+    OutputDebug, AltTab.ahk Win10_Window_Action: unknown action "%Action_Id%"
+    Return
+  }
+  Get__Selected_Row_and_RowText()
+  Target_wid := Window%RowText%
+  Gosub, ListView_Destroy
+  If Target_wid
+  {
+    WinGet, Target_MinMax, MinMax, ahk_id %Target_wid%
+    if (Target_MinMax = -1)
+      WinRestore, ahk_id %Target_wid%
+    WinActivate, ahk_id %Target_wid%
+    WinWaitActive, ahk_id %Target_wid%,, Win10_Action_Timeout
+    Activated := (ErrorLevel = 0)
+  }
+  Else
+    ; Actions like desktop switching or task view do not require a specific window to be active.
+    Activated := 1
+  If (Action_Label_Full ~= "VDA" and Activated)
+  {
+    if VDA_Handle(Action_Label_Full, Target_wid)
+      Return
+  }
+  If (Action_Key != "" and Activated)
+    SendInput, %Action_Key%
+  Return
+
+VDA_Handle(Action_Id, Target_wid)
+{
+  Global VDA_DLL_Path, VDA_Is_Available
+  if !VDA_Is_Available
+    return 0
+
+  desktopCount := DllCall(VDA_DLL_Path "\GetDesktopCount", "Int")
+  current := DllCall(VDA_DLL_Path "\GetCurrentDesktopNumber", "Int")
+  if (desktopCount < 1 or current < 0)
+    return 0
+
+  target := current
+  if (Action_Id = "Switch to Previous Desktop (VDA)")
+    target := (current - 1 >= 0) ? current - 1 : current
+  else if (Action_Id = "Switch to Next Desktop (VDA)")
+    target := (current + 1 < desktopCount) ? current + 1 : current
+  else if (Action_Id = "Move window to Previous Desktop (VDA)")
+    target := (current - 1 >= 0) ? current - 1 : current
+  else if (Action_Id = "Move window to Next Desktop (VDA)")
+    target := (current + 1 < desktopCount) ? current + 1 : current
+  else
+    return 0
+
+  if (target = current and Action_Id contains "Switch to")
+    return 1
+
+  if (Action_Id contains "Move window")
+  {
+    if !Target_wid
+      return 0
+    DllCall(VDA_DLL_Path "\MoveWindowToDesktopNumber", "Ptr", Target_wid, "Int", target)
+    DllCall(VDA_DLL_Path "\GoToDesktopNumber", "Int", target)
+    return 1
+  }
+
+  DllCall(VDA_DLL_Path "\GoToDesktopNumber", "Int", target)
+  return 1
+}
 
 GuiControl_Disable_ListView1:
   OnMessage( 0x06, "" ) ; turn off: no alt tab list window lost focus -> hide list

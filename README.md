@@ -22,6 +22,8 @@ This version of AltTab.ahk features:
 * No warnings from AutoHotKey when using two-finger scrolling
 * Hidden group support (by h46incon)
 * Tray icon hidden optional, and custom tray icon support (by h46incon)
+* Windows 10/11 window management shortcuts (snap layouts, monitor/desktop moves, Task View) from the context menu
+* Optional VirtualDesktopAccessor.dll integration for native virtual desktop switching/moving without key-sends
 
 
 ALT-TAB REPLACEMENT (WITH ICONS AND WINDOW TITLES IN A LISTVIEW).
@@ -61,6 +63,8 @@ Basic hotkey support for switching to specific windows (using window groups and 
 Exclude (and un-exclude) specific windows and specific .EXEs - see "Window Groups" below.
 Window Groups - define lists of windows to easily switch between only showing certain apps.
 Manage groups of windows and processes (min/max all, close all, etc).
+Windows 10/11 actions for snapping, moving between monitors, and working with virtual desktops (Task View, show desktop, move/switch desktops).
+If `VirtualDesktopAccessor.dll` is placed next to the script, additional native virtual desktop actions (switch/move window) appear under Windows 10/11 Actions.
 
 Close windows:
 Alt+= "hotkey"  - toggle windows AlwaysOnTop status
